@@ -2,7 +2,8 @@ import gi
 import datetime
 import neovim
 import tempfile
-from threading import Thread
+# from threading import Thread
+import threading
 from functools import partial
 from dream_dtb import config
 
@@ -18,6 +19,23 @@ from dream_dtb.db import DreamType
 gi.require_version('Gtk', '3.0')
 gi.require_version('Vte', '2.91')
 from gi.repository import Gtk, Gio, Vte, GLib, GObject
+
+
+class RpcEventHandler():
+    """Manage nvim loop for handling rpc events
+    """
+
+    def __init__(self, nvim: object, func_req, func_not):
+        # self.stop_running = threading.Event()
+        self.loop_thread = threading.Thread(target=nvim.run_loop, args=(func_req, func_not))
+
+    def start(self):
+        self.loop_thread.start()
+
+    def stop(self):
+        print("start join")
+        self.loop_thread.join()
+        print("stop join")
 
 
 class Observable:
@@ -326,14 +344,10 @@ class Editor(Gtk.Frame):
         nvim.vars['gui_channel'] = nvim.channel_id
         nvim.command(f'set rtp^={config.NVIM_RUNTIME}', async=True)
         nvim.command('runtime! ginit.vim', async=True)
-        # For some reasons daemon=True produces unexpected behaviors like my
-        # print statement not being executed. Turning it off for now. Seems to
-        # solve all problems.
-        # TODO: make a Thread class for nvim run loop process ?
-        # TODO: Should I close the thread now that it is non daemonized ?
-        Thread(daemon=False, target=nvim.run_loop,
-               args=(partial(self.emit, 'nvim-request', nvim),
-                     partial(self.emit, 'nvim-notify', nvim))).start()
+        self.nvim_loop = RpcEventHandler(nvim,
+                                         partial(self.emit, 'nvim-request', nvim),
+                                         partial(self.emit, 'nvim-notify', nvim))
+        self.nvim_loop.start()
 
     @GObject.Signal(flags=GObject.SignalFlags.RUN_LAST)
     def nvim_notify(self, nvim: object, sub: str, args: object):
@@ -373,11 +387,20 @@ class MenuBar(Gtk.HeaderBar):
         super().__init__()
         self.set_show_close_button(True)
 
-        button = Gtk.Button()
-        icon = Gio.ThemedIcon(name="mail-send-receive-symbolic")
-        image = Gtk.Image.new_from_gicon(icon, Gtk.IconSize.BUTTON)
-        button.add(image)
-        self.pack_end(button)
+        # button = Gtk.Button()
+        # icon = Gio.ThemedIcon(name="mail-send-receive-symbolic")
+        # image = Gtk.Image.new_from_gicon(icon, Gtk.IconSize.BUTTON)
+        # button.add(image)
+        # self.pack_end(button)
+        # self.close = Gtk.Button()
+        # self.close.set_relief(Gtk.ReliefStyle.NONE)
+        # img = Gtk.Image.new_from_icon_name("window-close-symbolic", Gtk.IconSize.MENU)
+        # self.close.set_image(img)
+        # self.close.connect("clicked", Gtk.main_quit)
+        # self.pack_end(self.close)
+
+        # seperator = Gtk.Separator.new(Gtk.Orientation.VERTICAL)
+        # self.pack_end(seperator)
 
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=1)
         # Gtk.StyleContext.add_class(box.get_style_context(), "linked")
@@ -448,7 +471,8 @@ class Controller:
         # Configure widgets events
         # self.MoneyChanged(self.model.myMoney.get())
         # self.view.navigationbar.tree.bind("<Double-1>", self.OnDoubleClick)
-        self.view.connect("delete-event", self.child_exited)
+        self.view.connect("delete-event", self.on_close_main)
+        # self.view.menubar.close.connect("clicked", self.on_close_clicked)
         self.view.edit.terminal.connect("child-exited", self.child_exited)
         self.view.navigationbar.tree.connect("row-activated", self.on_tree_double_click)
         self.view.menubar.newdream.connect("clicked", self.on_newdream_click)
@@ -461,8 +485,17 @@ class Controller:
         self.model.myTree.set(self.model.getDreamItems())
         # self.TreeChanged(self.model.myTree.get())
 
-        # self.view.connect("delete-event", Gtk.main_quit)
         self.view.show_all()
+
+    def on_close_main(self, *args):
+        print("close event")
+        self.view.edit.nvim.command('xa!', async=True)
+        # The default behavior is to propagate the close signal into the
+        # destroy event. To stop the propagation the handler must return True
+        return True
+
+    def on_close_clicked(self, *args):
+        self.view.edit.nvim.command('xa!', async=True)
 
     def on_newdream_click(self, *args):
         dialog = DreamDialog(self.view)
@@ -498,13 +531,14 @@ class Controller:
         dialog.destroy()
 
     def child_exited(self, *args):
-        self.view.edit.nvim.command('call dreamdtb#notify_quit_vim()', async=True)
+        # self.view.edit.nvim.command('call dreamdtb#notify_quit_vim()', async=True)
+        print("on child exited")
+        self.view.edit.nvim_loop.stop()
         self.view.destroy()
         Gtk.main_quit()
 
     def on_tree_double_click(self, tree_view, path, column):
         """ callback when an item of the treeview has been double-clicked
-
         """
         if path.get_depth() == 2:
             print("double click on dream id: {}".format(self.view.navigationbar.store[path][1]))
@@ -560,4 +594,4 @@ class Controller:
 # available.
 # TODO: implement a logger instead of printing to stdout
 # TODO: implement all query statements in the corresponding DAO ???
-# TODO: close nvim_loop thread as it is not a daemon anymore
+# https://developer.gnome.org/gtk3/3.10/ch28s02.html
