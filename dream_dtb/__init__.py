@@ -1,4 +1,5 @@
 import os
+import logging
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import create_engine
@@ -7,6 +8,7 @@ from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.declarative import declarative_base
 from dream_dtb import config
 
+logger = logging.getLogger('dream_logger')
 
 def init_xdg_dir(filepaths):
     """ Create necessary directories
@@ -17,8 +19,8 @@ def init_xdg_dir(filepaths):
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
 
-print("init xdg dir")
-init_xdg_dir([config.DB_PATH, config.IPC_PATH])
+logger.info("init xdg dir")
+init_xdg_dir([config.DB_PATH, config.IPC_PATH, config.LOG_PATH])
 
 
 class BaseMixin():

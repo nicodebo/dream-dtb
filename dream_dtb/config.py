@@ -31,9 +31,9 @@ except KeyError:
     DB_PATH = os.path.join(os.environ['HOME'], '.local', 'share', 'dreamdtb', DB_NAME)
 
 try:
-    LOG_PATH = os.path.join(os.environ['XDG_CACHE_HOME'], 'dreamdtb', DB_NAME)
+    LOG_PATH = os.path.join(os.environ['XDG_CACHE_HOME'], 'dreamdtb', LOG_NAME)
 except KeyError:
-    LOG_PATH = os.path.join(os.environ['HOME'], '.cache', 'dreamdtb', DB_NAME)
+    LOG_PATH = os.path.join(os.environ['HOME'], '.cache', 'dreamdtb', LOG_NAME)
 
 try:
     IPC_PATH = os.path.join(os.environ['XDG_RUNTIME_DIR'], 'dreamdtb', SOCK_NAME)
@@ -42,3 +42,45 @@ except KeyError:
 
 
 BUF_PATH = tempfile.mkdtemp(prefix='dreamdtb')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '%(levelname)s :: %(asctime)s :: %(module)s :: %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S'
+        },
+        'simple': {
+            'format': '%(levelname)s :: %(message)s'
+        }
+    },
+    'handlers': {
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'formatter': 'verbose',
+            'filename': LOG_PATH,
+            'maxBytes': 1000000,
+            'backupCount': 1,
+            'mode': 'a'
+        },
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+            'stream': 'ext://sys.stdout'
+        },
+    },
+    'loggers': {
+        'dream_logger': {
+            'handlers': ['console', 'file'],
+            # 'propagate': False,
+            'level': 'DEBUG'
+        }
+    },
+    # 'root': {
+    #     'handlers': ['console', 'file'],
+    #     'level': 'DEBUG'
+    # }
+}

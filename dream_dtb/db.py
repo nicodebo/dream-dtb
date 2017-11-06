@@ -1,3 +1,4 @@
+import logging
 import os
 import pathlib
 
@@ -22,6 +23,7 @@ from dream_dtb.util import session_scope
 from dream_dtb import Base
 from dream_dtb import Engine
 
+logger = logging.getLogger('dream_logger')
 
 def object_as_dict(obj):
     return {c.key: getattr(obj, c.key)
@@ -40,12 +42,12 @@ class InitDb(metaclass=Singleton):
     def createDb(self):
         """ Create database if does not exists """
         if not database_exists(self.engine.url):
-            print("database does not exists")
+            logger.info("database does not exists")
             pathlib.Path(os.path.dirname(self.engine.url.database)).mkdir(parents=True,
                                                                           exist_ok=True)
             create_database(self.engine.url)
         else:
-            print("database already exists")
+            logger.info("database already exists")
 
     def popDb(self):
         """ Generate tables """
@@ -151,7 +153,7 @@ class TagDAO:
             with session_scope() as session:
                 session.add(record)
         except IntegrityError:
-            print(f'duplicate Tag: {tag}')
+            logger.info(f'duplicate Tag: {tag}')
 
     @classmethod
     def find(cls, labels):
@@ -172,7 +174,7 @@ class DreamTypeDAO:
             with session_scope() as session:
                 session.add(record)
         except IntegrityError:
-            print(f'duplicate DreamType: {drtype}')
+            logger.info(f'duplicate DreamType: {drtype}')
 
     @classmethod
     def find(cls, labels):
@@ -207,7 +209,7 @@ class DreamDAO:
                 session.flush()
                 idnum = record.id
         except IntegrityError:
-            print("duplicate Dream")
+            logger.info("duplicate Dream")
 
         if idnum is not None:
             cls._add_tags(idnum, instance['tags'])
@@ -250,7 +252,7 @@ class DreamDAO:
                 record.recit = instance['recit']
                 session.add(record)
         except IntegrityError:
-            print("error bli")
+            logger.info("error bli")
 
     @classmethod
     def find_by_id(cls, idnum):
@@ -260,7 +262,7 @@ class DreamDAO:
             Return:
             obj: a query object
         """
-        print("find by id: ", idnum)
+        logger.info(f'find by id: {idnum}')
         try:
             with session_scope() as session:
                 obj = session.query(Dream).filter(Dream.id == idnum).one()
@@ -268,7 +270,7 @@ class DreamDAO:
                 record['tags'] = obj.get_tags()
                 record['drtype'] = obj.get_drtype()
         except:
-            print("find by id error")
+            logger.info("find by id error")
 
         # print(record)
         return record
@@ -294,7 +296,7 @@ class DreamDAO:
                         if tags_rec not in instance.tags:
                             instance.tags.append(elem)
             except:
-                print("append tags error")
+                logger.info("append tags error")
                 raise
 
     @classmethod
@@ -312,7 +314,7 @@ class DreamDAO:
                     if drtype_rec not in instance.drtype:
                         instance.drtype.append(drtype_rec)
             except:
-                print("append drtype error")
+                logger.info("append drtype error")
 
 # initialize database
 InitDb(Engine, Base)

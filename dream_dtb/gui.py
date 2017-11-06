@@ -2,6 +2,7 @@ import gi
 import datetime
 import neovim
 import tempfile
+import logging
 # from threading import Thread
 import threading
 from functools import partial
@@ -21,6 +22,9 @@ gi.require_version('Vte', '2.91')
 from gi.repository import Gtk, Gio, Vte, GLib, GObject
 
 
+logger = logging.getLogger('dream_logger')
+
+
 class RpcEventHandler():
     """Manage nvim loop for handling rpc events
     """
@@ -33,9 +37,9 @@ class RpcEventHandler():
         self.loop_thread.start()
 
     def stop(self):
-        print("start join")
+        logger.info("waiting for nvim loop to finish...")
         self.loop_thread.join()
-        print("stop join")
+        logger.info("nvim loop finished")
 
 
 class Observable:
@@ -118,12 +122,13 @@ class Buffer():
         buf = self.bufs[bufname]
         if buf['modified']:
             if buf['instance']['id'] is None:
-                print("start create record")
+                logger.info("create record...")
                 DreamDAO.create(buf['instance'])
-                print("stop create record")
-                print("dream created in database")
+                logger.info("done creating record")
             else:
+                logger.info("modify record...")
                 DreamDAO.update(buf['instance']['id'], buf['instance'])
+                logger.info("done modifying record")
             self.bufs[bufname]['modified'] = False
 
     def get_ids(self):
@@ -139,10 +144,9 @@ class Buffer():
             return elem
 
     def save_all(self):
-        # print(self.bufs)
-        print("save all!")
+        logger.info("save all buffer!")
         for elem in list(self.bufs):
-            print("save: ", elem)
+            logger.info(f'save: {elem}')
             self.save(elem)
 
     def remove(self, bufname):
@@ -290,7 +294,7 @@ class DreamDialog(Gtk.Dialog):
             self.column_combo.set_title(new_title)
             self.liststore_tags_entry.remove(treeiter)
         else:
-            print("no item selected !")
+            logger.info("no item selected !")
 
 
 class Editor(Gtk.Frame):
@@ -323,7 +327,7 @@ class Editor(Gtk.Frame):
             """
             self.terminal.disconnect(once)
             self.nvim = neovim.attach('socket', path=addr)
-            print("nvim attached")
+            logger.info("nvim attached")
             self.emit('nvim-setup', self.nvim)
         once = self.terminal.connect('cursor-moved', callback)
         self.terminal.spawn_sync(Vte.PtyFlags.DEFAULT,
@@ -339,7 +343,7 @@ class Editor(Gtk.Frame):
     def nvim_setup(self, nvim: object):
         """ Custom signal 'nvim_setup' used for initilizing some nvim options
         """
-        print("init nvim")
+        logger.info("init nvim")
         nvim.subscribe('DreamGuiEvent')
         nvim.vars['gui_channel'] = nvim.channel_id
         nvim.command(f'set rtp^={config.NVIM_RUNTIME}', async=True)
@@ -356,10 +360,10 @@ class Editor(Gtk.Frame):
             with open(args[1], 'r') as myfile:
                 data = myfile.read()
             self.event_callback['Save'](args[1], recit=data)
-            print(f'{args[1]} saved !')
+            logger.info(f'{args[1]} saved !')
         if sub == 'DreamGuiEvent' and args[0] == 'Quit':
             self.event_callback['Quit']()
-            print('vim quit event')
+            logger.info('vim quit event')
 
     @GObject.Signal(flags=GObject.SignalFlags.RUN_LAST)
     def nvim_request(self, nvim: object, sub: str, args: object):
@@ -488,7 +492,7 @@ class Controller:
         self.view.show_all()
 
     def on_close_main(self, *args):
-        print("close event")
+        logger.info("close event")
         self.view.edit.nvim.command('xa!', async=True)
         # The default behavior is to propagate the close signal into the
         # destroy event. To stop the propagation the handler must return True
@@ -502,15 +506,15 @@ class Controller:
         response = dialog.run()
 
         if response == Gtk.ResponseType.OK:
-            print("The OK button of the newdream dialog was clicked")
-            print(f'date: {dialog.date_entry.get_date()}')
-            print(f'title: {dialog.title_entry.get_text()}')
-            print(f'dream type: {dialog.drtype_entry.get_active_text()}')
+            logger.info("The OK button of the newdream dialog was clicked")
+            logger.info(f'date: {dialog.date_entry.get_date()}')
+            logger.info(f'title: {dialog.title_entry.get_text()}')
+            logger.info(f'dream type: {dialog.drtype_entry.get_active_text()}')
             tag_tmp = []
             for row in dialog.liststore_tags_entry:
                 if row[0] not in tag_tmp:
                     tag_tmp.append(row[0])
-            print(f'tags: {tag_tmp}')
+            logger.info(f'tags: {tag_tmp}')
             year, month, day = dialog.date_entry.get_date()
             date = datetime.datetime.strptime(f'{year}{month}{day}', "%Y%m%d")
             # TODO: check that the combination (date, title) does not already
@@ -526,13 +530,13 @@ class Controller:
                                   drtype=dialog.drtype_entry.get_active_text())
             self.view.edit.nvim.command(f'edit {tmpfile[1]}', async=True)
         elif response == Gtk.ResponseType.CANCEL:
-            print("The Cancel button of the newdream dialog was clicked")
+            logger.info("The Cancel button of the newdream dialog was clicked")
 
         dialog.destroy()
 
     def child_exited(self, *args):
         # self.view.edit.nvim.command('call dreamdtb#notify_quit_vim()', async=True)
-        print("on child exited")
+        logger.info("nvim exited")
         self.view.edit.nvim_loop.stop()
         self.view.destroy()
         Gtk.main_quit()
@@ -541,7 +545,7 @@ class Controller:
         """ callback when an item of the treeview has been double-clicked
         """
         if path.get_depth() == 2:
-            print("double click on dream id: {}".format(self.view.navigationbar.store[path][1]))
+            logger.info(f'double click on dream id: {self.view.navigationbar.store[path][1]}')
             inst = DreamDAO.find_by_id(self.view.navigationbar.store[path][1])
             if inst['id'] not in self.model.myBuff.get_ids():
                 tmpfile = tempfile.mkstemp(dir=config.BUF_PATH)
@@ -559,7 +563,7 @@ class Controller:
                 tmp_val = self.model.myBuff.get_bufname(inst.id)
                 self.view.edit.nvim.command(f'buffer {tmp_val}', async=True)
         else:
-            print("double click on date")
+            logger.info("double click on date")
 
     def AddDream(self):
         # TODO: copy code from on_tree_double_click, add callback and custom
@@ -592,6 +596,5 @@ class Controller:
 # should not be used in newly-written code.  Use vte_terminal_spawn_async()
 # instead. Not sure what my version is, but vte_terminal_spawn_async is not
 # available.
-# TODO: implement a logger instead of printing to stdout
 # TODO: implement all query statements in the corresponding DAO ???
 # https://developer.gnome.org/gtk3/3.10/ch28s02.html

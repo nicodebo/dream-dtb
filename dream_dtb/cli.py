@@ -1,17 +1,22 @@
 import click
 from click_default_group import DefaultGroup
 import datetime
+import logging
+import logging.config
 
 from dream_dtb.gui import Controller
 # from dream_dtb.db import Connection
 from dream_dtb import config
-from dream_dtb import Base
-from dream_dtb import Engine
+# from dream_dtb import Base
+# from dream_dtb import Engine
 from dream_dtb.util import session_scope
 from dream_dtb.db import Dream
 from dream_dtb.db import DreamDAO
 from dream_dtb.db import Tag
 from dream_dtb.db import DreamType
+
+logging.config.dictConfig(config.LOGGING)
+logger = logging.getLogger('dream_logger')
 
 
 def launch_gui(date=None, title=None, tags=None, drtype=None):
@@ -75,6 +80,7 @@ def add(**kwargs):
     """ start writing a dream """
     # print("add a dream to the database")
     # test()
+    logger.info('add dream command')
     launch_gui()
 
 
