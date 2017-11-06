@@ -1,17 +1,23 @@
 Dream Dtb
 =========
 
-A dream note gui build around neovim
+A dream journal build around neovim
+
+|gui|
 
 Features
 --------
 
--  Dreams are written into sqlite database
+-  Frontend to neovim
+-  Dreams are stored into an sqlite database
 -  Dreams can be tagged
+-  Navigation tree to quickly open and edit a dream
 
 TODO
 ----
 
--  turn dream database into a pdf
+-  generate a pdf from the database
 -  browse dream database on a web browser like a blog
 -  add a dream from the command line
+
+.. |gui| image:: screenshot.png
