@@ -3,15 +3,10 @@ import datetime
 import neovim
 import tempfile
 import logging
-# from threading import Thread
 import threading
 from functools import partial
 from dream_dtb import config
 
-# from sqlalchemy.event import listen
-# from sqlalchemy.pool import Pool
-
-# from dream_dtb import db
 from dream_dtb import util
 from dream_dtb.db import Dream
 from dream_dtb.db import DreamDAO
@@ -30,7 +25,6 @@ class RpcEventHandler():
     """
 
     def __init__(self, nvim: object, func_req, func_not):
-        # self.stop_running = threading.Event()
         self.loop_thread = threading.Thread(target=nvim.run_loop, args=(func_req, func_not))
 
     def start(self):
@@ -152,7 +146,6 @@ class Buffer():
     def remove(self, bufname):
         """ remove a buffer from the buffer stack """
         print("buffer removed")
-        # pass
 
 
 class Model:
@@ -175,8 +168,6 @@ class Model:
             # TODO: make tree by year-->month-->day-->dream(s) instead of the
             # current year-month-day-->dream(s)
             for inst in session.query(Dream).order_by(Dream.date, Dream.title):
-                # print(i)
-                # print(items)
                 date = inst.date.strftime('%Y-%m-%d')
                 if date == date_tmp:
                     items[last_ind].append([inst.title, inst.id])
@@ -211,8 +202,6 @@ class DreamDialog(Gtk.Dialog):
 
         self.scrolled_window = Gtk.ScrolledWindow()
         self.scrolled_window.set_border_width(2)
-        # there is always the scrollbar (otherwise: AUTOMATIC - only if needed
-        # - or NEVER)
         self.scrolled_window.set_policy(
             Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
 
@@ -362,8 +351,8 @@ class Editor(Gtk.Frame):
             self.event_callback['Save'](args[1], recit=data)
             logger.info(f'{args[1]} saved !')
         if sub == 'DreamGuiEvent' and args[0] == 'Quit':
-            self.event_callback['Quit']()
             logger.info('vim quit event')
+            self.event_callback['Quit']()
 
     @GObject.Signal(flags=GObject.SignalFlags.RUN_LAST)
     def nvim_request(self, nvim: object, sub: str, args: object):
@@ -391,29 +380,11 @@ class MenuBar(Gtk.HeaderBar):
         super().__init__()
         self.set_show_close_button(True)
 
-        # button = Gtk.Button()
-        # icon = Gio.ThemedIcon(name="mail-send-receive-symbolic")
-        # image = Gtk.Image.new_from_gicon(icon, Gtk.IconSize.BUTTON)
-        # button.add(image)
-        # self.pack_end(button)
-        # self.close = Gtk.Button()
-        # self.close.set_relief(Gtk.ReliefStyle.NONE)
-        # img = Gtk.Image.new_from_icon_name("window-close-symbolic", Gtk.IconSize.MENU)
-        # self.close.set_image(img)
-        # self.close.connect("clicked", Gtk.main_quit)
-        # self.pack_end(self.close)
-
-        # seperator = Gtk.Separator.new(Gtk.Orientation.VERTICAL)
-        # self.pack_end(seperator)
-
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=1)
         # Gtk.StyleContext.add_class(box.get_style_context(), "linked")
 
         self.newdream = Gtk.Button(label="New dream")
         box.add(self.newdream)
-
-        button = Gtk.Button("Save all")
-        box.add(button)
 
         self.pack_start(box)
 
@@ -470,24 +441,16 @@ class Controller:
         # Add callback for neovim rpc event
         self.view.edit.event_callback['Save'] = self.model.myBuff.modify
         self.view.edit.event_callback['Quit'] = self.model.myBuff.save_all
-        # self.model.myTree.addCallback(self.MoneyChanged)
 
         # Configure widgets events
-        # self.MoneyChanged(self.model.myMoney.get())
-        # self.view.navigationbar.tree.bind("<Double-1>", self.OnDoubleClick)
         self.view.connect("delete-event", self.on_close_main)
-        # self.view.menubar.close.connect("clicked", self.on_close_clicked)
-        self.view.edit.terminal.connect("child-exited", self.child_exited)
+        self.view.edit.terminal.connect("child-exited", self.on_child_exit)
         self.view.navigationbar.tree.connect("row-activated", self.on_tree_double_click)
         self.view.menubar.newdream.connect("clicked", self.on_newdream_click)
-        # self.select = self.view.navigationbar.tree.get_selection()
-        # self.select.connect("row-activated", self.on_tree_selection_changed)
-        # self.view.menubar.connect("")
 
         # Init the view
         # TODO: I should call self.TreeChanged(self.model.myTree.get()) ?
         self.model.myTree.set(self.model.getDreamItems())
-        # self.TreeChanged(self.model.myTree.get())
 
         self.view.show_all()
 
@@ -497,9 +460,6 @@ class Controller:
         # The default behavior is to propagate the close signal into the
         # destroy event. To stop the propagation the handler must return True
         return True
-
-    def on_close_clicked(self, *args):
-        self.view.edit.nvim.command('xa!', async=True)
 
     def on_newdream_click(self, *args):
         dialog = DreamDialog(self.view)
@@ -534,8 +494,7 @@ class Controller:
 
         dialog.destroy()
 
-    def child_exited(self, *args):
-        # self.view.edit.nvim.command('call dreamdtb#notify_quit_vim()', async=True)
+    def on_child_exit(self, *args):
         logger.info("nvim exited")
         self.view.edit.nvim_loop.stop()
         self.view.destroy()
@@ -569,15 +528,6 @@ class Controller:
         # TODO: copy code from on_tree_double_click, add callback and custom
         # signal
         pass
-
-    def AddMoney(self):
-        self.model.addMoney(10)
-
-    def RemoveMoney(self):
-        self.model.removeMoney(10)
-
-    def MoneyChanged(self, money):
-        self.view.SetMoney(money)
 
     def TreeChanged(self, items):
         self.view.SetTree(items)

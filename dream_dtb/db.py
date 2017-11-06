@@ -57,19 +57,15 @@ class InitDb(metaclass=Singleton):
 class Tag(Base):
 
     label = Column(String, unique=True)
-    # __table_args__ = (UniqueConstraint('label', name='_label_uc'),)
 
     def __repr__(self):
         return "<Label(tag='{}')>".format(self.label)
 
 
-
 class DreamType(Base):
 
     label = Column(String, unique=True)
-    # __table_args__ = (UniqueConstraint('label', name='_label_uc'),)
 
-#TODO: Don't duplicate the create function
     def __repr__(self):
         return "<DreamType(dream_type='{}')>".format(self.label)
 
@@ -99,6 +95,7 @@ class Dream(Base, Timestamp):
 
     def __repr__(self):
 
+        # TODO: use self.get_tags and self.get_drtype
         if not self.tags:
             tags = "no tags defined !"
         elif len(self.tags) == 1:
@@ -112,11 +109,11 @@ class Dream(Base, Timestamp):
             drtype = self.drtype[0].label
 
         return "Dream<(\n'{}:{}: {}'\n{}\ntype: {}\ntags: {}\n)>".format(self.title,
-                                                                      self.id,
-                                                                      self.date,
-                                                                      self.recit,
-                                                                      drtype,
-                                                                      tags)
+                                                                         self.id,
+                                                                         self.date,
+                                                                         self.recit,
+                                                                         drtype,
+                                                                         tags)
 
     def get_tags(self):
         """ return tags associated with self has a list of strings
@@ -190,7 +187,6 @@ class DreamDAO:
 
     @classmethod
     def create(cls, instance):
-        # TODO: pass tags and drtype as a dictionnary ? **kwargs
         """ Arguments:
             - instance (dict): dictionnary containing row attributes and values
                 - title (str): dream title
@@ -318,7 +314,4 @@ class DreamDAO:
 
 # initialize database
 InitDb(Engine, Base)
-# TODO: Find how to pass connection singleton to the Base class ? or just
-# remove singleton.
-# TODO: find how to use the Enum for the dreamtype column ?
 # TODO: Move all DAO class into its own file ?

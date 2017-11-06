@@ -1,14 +1,16 @@
-import os
 import logging
+import os
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.declarative import declarative_base
+
 from dream_dtb import config
 
 logger = logging.getLogger('dream_logger')
+
 
 def init_xdg_dir(filepaths):
     """ Create necessary directories
