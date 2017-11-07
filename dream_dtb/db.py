@@ -98,18 +98,13 @@ class Dream(Base, Timestamp):
 
     def __repr__(self):
 
-        # TODO: use self.get_tags and self.get_drtype
-        if not self.tags:
+        tags = ', '.join(self.get_tags())
+        if not tags:
             tags = "no tags defined !"
-        elif len(self.tags) == 1:
-            tags = self.tags[0].label
-        else:
-            tags = ', '.join([elem.label for elem in self.tags])
 
-        if not self.drtype:
+        drtype = self.get_drtype()
+        if not drtype:
             drtype = "no type defined !"
-        else:
-            drtype = self.drtype[0].label
 
         return "Dream<(\n'{}:{}: {}'\n{}\ntype: {}\ntags: {}\n)>".format(self.title,
                                                                          self.id,

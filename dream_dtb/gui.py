@@ -476,7 +476,6 @@ class Controller:
     def on_tree_double_click(self, tree_view, path, column):
         """ callback when an item of the treeview has been double-clicked
         """
-        print(path.get_depth())
         if path.get_depth() == 4:
             logger.info(f'double click on dream id: {self.view.navigationbar.store[path][1]}')
             inst = DreamDAO.find_by_id(self.view.navigationbar.store[path][1])
@@ -515,10 +514,9 @@ class Controller:
 # doc de base
 # https://python-gtk-3-tutorial.readthedocs.io/en/latest/layout.html#notebook
 # https://developer.gnome.org/gnome-devel-demos/unstable/treeview_treestore.py.html.en
+# https://developer.gnome.org/gtk3/3.10/ch28s02.html
 
 # TODO: vte_terminal_spawn_sync has been deprecated since version 0.48 and
 # should not be used in newly-written code.  Use vte_terminal_spawn_async()
 # instead. Not sure what my version is, but vte_terminal_spawn_async is not
 # available.
-# TODO: implement all query statements in the corresponding DAO ???
-# https://developer.gnome.org/gtk3/3.10/ch28s02.html
