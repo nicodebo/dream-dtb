@@ -1,7 +1,10 @@
 import logging
 import os
 import pathlib
+import pandas as pd
+import numpy as np
 
+from collections import OrderedDict
 from sqlalchemy import Column
 from sqlalchemy import Text
 from sqlalchemy import Integer
@@ -161,6 +164,16 @@ class TagDAO:
             obj = session.query(Tag).filter(Tag.label.in_(labels))
         return obj
 
+    @classmethod
+    def get_labels(cls):
+        """ Return the list of defined labels
+        """
+        labels = []
+        with session_scope() as session:
+            for inst in session.query(Tag):
+                labels.append(inst.label)
+        return labels
+
 
 class DreamTypeDAO:
 
@@ -181,6 +194,16 @@ class DreamTypeDAO:
         with session_scope() as session:
             obj = session.query(DreamType).filter(DreamType.label.in_(labels))
         return obj
+
+    @classmethod
+    def get_labels(cls):
+        """ Return the list of defined labels
+        """
+        labels = []
+        with session_scope() as session:
+            for inst in session.query(DreamType):
+                labels.append(inst.label)
+        return labels
 
 
 class DreamDAO:
@@ -268,7 +291,6 @@ class DreamDAO:
         except:
             logger.info("find by id error")
 
-        # print(record)
         return record
 
     @classmethod
@@ -303,6 +325,7 @@ class DreamDAO:
         if drtype:
             DreamTypeDAO.create(drtype)
 
+            # TODO: either use .one() or .first() but not both.
             try:
                 with session_scope() as session:
                     instance = session.query(Dream).filter(Dream.id == idnum).one()
@@ -312,6 +335,38 @@ class DreamDAO:
             except:
                 logger.info("append drtype error")
 
+    @classmethod
+    def get_tree(cls):
+
+        tree = OrderedDict()
+
+        with session_scope() as session:
+            instances = session.query(Dream).order_by(Dream.date, Dream.created)
+            nbrows = instances.count()
+            dftree = pd.DataFrame(index = np.arange(0, nbrows), columns=['year', 'month', 'day', 'id', 'title'])
+            for i, inst in enumerate(instances):
+                year = inst.date.strftime('%Y')
+                month = inst.date.strftime('%m')
+                day = inst.date.strftime('%d')
+                dftree.loc[i] = [year, month, day, inst.id, inst.title]
+
+        dftree.apply(cls.poptree, args=(tree,), axis=1)
+
+        return(tree)
+
+    @staticmethod
+    def poptree(row, tree):
+        """ A helper function to be used with an dataframe.apply function
+        """
+        if row['year'] not in tree:
+            tree[row['year']] = OrderedDict()
+        if row['month'] not in tree[row['year']]:
+            tree[row['year']][row['month']] = OrderedDict()
+
+        tree[row['year']][row['month']].setdefault(row['day'], []).append([row['title'], row['id']])
+
+
 # initialize database
 InitDb(Engine, Base)
-# TODO: Move all DAO class into its own file ?
+# TODO: Move all DAO classes into its own file ?
+# TODO: Singleton seems useless

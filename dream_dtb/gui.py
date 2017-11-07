@@ -7,11 +7,9 @@ import threading
 from functools import partial
 from dream_dtb import config
 
-from dream_dtb import util
-from dream_dtb.db import Dream
 from dream_dtb.db import DreamDAO
-from dream_dtb.db import Tag
-from dream_dtb.db import DreamType
+from dream_dtb.db import TagDAO
+from dream_dtb.db import DreamTypeDAO
 gi.require_version('Gtk', '3.0')
 gi.require_version('Vte', '2.91')
 from gi.repository import Gtk, Gio, Vte, GLib, GObject
@@ -150,35 +148,13 @@ class Buffer():
 
 class Model:
     def __init__(self):
-        self.myMoney = Observable(0)
-        self.myTree = Observable()
+        self.myTree = Observable(DreamDAO.get_tree())
         self.myBuff = Buffer()
 
-    def addMoney(self, value):
-        self.myMoney.set(self.myMoney.get() + value)
-
-    def removeMoney(self, value):
-        self.myMoney.set(self.myMoney.get() - value)
-
-    def getDreamItems(self):
-        items = []
-        date_tmp = None
-        with util.session_scope() as session:
-            # TODO: order record by creation date instead of title
-            # TODO: make tree by year-->month-->day-->dream(s) instead of the
-            # current year-month-day-->dream(s)
-            for inst in session.query(Dream).order_by(Dream.date, Dream.title):
-                date = inst.date.strftime('%Y-%m-%d')
-                if date == date_tmp:
-                    items[last_ind].append([inst.title, inst.id])
-                else:
-                    items.append([date, [inst.title, inst.id]])
-                    last_ind = len(items) - 1
-                date_tmp = date
-        return(items)
-
     def updateTree(self):
-        self.myTree.set(self.getDreamItems())
+        self.myTree.set(DreamDAO.get_tree())
+
+    # TODO: add wrapper functions for myBuff
 
 
 class DreamDialog(Gtk.Dialog):
@@ -206,9 +182,8 @@ class DreamDialog(Gtk.Dialog):
             Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
 
         self.liststore_tags = Gtk.ListStore(str)
-        with util.session_scope() as session:
-            for inst in session.query(Tag):
-                self.liststore_tags.append([inst.label])
+        for label in TagDAO.get_labels():
+                self.liststore_tags.append([label])
 
         self.liststore_tags_entry = Gtk.ListStore(str)
         self.tags_entry = Gtk.TreeView(model=self.liststore_tags_entry)
@@ -239,9 +214,8 @@ class DreamDialog(Gtk.Dialog):
 
         self.drtype_label = Gtk.Label('Dream type:')
         self.drtype_entry = Gtk.ComboBoxText.new_with_entry()
-        with util.session_scope() as session:
-            for inst in session.query(DreamType):
-                self.drtype_entry.insert_text(-1, inst.label)
+        for label in DreamTypeDAO.get_labels():
+                self.drtype_entry.insert_text(-1, label)
 
         self.tag_button_grid = Gtk.Grid()
         self.tag_button_grid.props.row_homogeneous = True
@@ -417,16 +391,16 @@ class View(Gtk.Window):
         self.paned.add1(self.navigationbar)
         self.paned.add2(self.edit)
 
-    def SetMoney(self, money):
-        self.moneyCtrl.delete(0, 'end')
-        self.moneyCtrl.insert('end', str(money))
-
-    def SetTree(self, items):
+    def SetTree(self, tree):
         self.navigationbar.store.clear()
-        for item in items:
-            piter = self.navigationbar.store.append(None, [item[0], -1])
-            for dream in item[1:len(item)]:
-                self.navigationbar.store.append(piter, dream)
+        for year in tree:
+            piter = self.navigationbar.store.append(None, [year, -1])
+            for month in tree[year]:
+                piter2 = self.navigationbar.store.append(piter, [month, -1])
+                for day in tree[year][month]:
+                    piter3 = self.navigationbar.store.append(piter2, [day, -1])
+                    for dream in tree[year][month][day]:
+                        self.navigationbar.store.append(piter3, dream)
 
 
 class Controller:
@@ -449,8 +423,7 @@ class Controller:
         self.view.menubar.newdream.connect("clicked", self.on_newdream_click)
 
         # Init the view
-        # TODO: I should call self.TreeChanged(self.model.myTree.get()) ?
-        self.model.myTree.set(self.model.getDreamItems())
+        self.TreeChanged(self.model.myTree.get())
 
         self.view.show_all()
 
@@ -503,7 +476,8 @@ class Controller:
     def on_tree_double_click(self, tree_view, path, column):
         """ callback when an item of the treeview has been double-clicked
         """
-        if path.get_depth() == 2:
+        print(path.get_depth())
+        if path.get_depth() == 4:
             logger.info(f'double click on dream id: {self.view.navigationbar.store[path][1]}')
             inst = DreamDAO.find_by_id(self.view.navigationbar.store[path][1])
             if inst['id'] not in self.model.myBuff.get_ids():
@@ -522,15 +496,15 @@ class Controller:
                 tmp_val = self.model.myBuff.get_bufname(inst.id)
                 self.view.edit.nvim.command(f'buffer {tmp_val}', async=True)
         else:
-            logger.info("double click on date")
+            logger.info("double click on date (year, month, or day)")
 
     def AddDream(self):
         # TODO: copy code from on_tree_double_click, add callback and custom
         # signal
         pass
 
-    def TreeChanged(self, items):
-        self.view.SetTree(items)
+    def TreeChanged(self, tree):
+        self.view.SetTree(tree)
 
     def RunGui(self):
         Gtk.main()
