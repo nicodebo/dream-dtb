@@ -69,39 +69,29 @@ class Buffer():
     def __init__(self):
         self.bufs = {}
 
-    def add(self, bufname, **kwargs):
-        # TODO: pass parameters as a dictionnary **kwarg and check parameters
-        # at least date and title should exists otherwise error
+    def add(self, instance):
         """ add a buffer to the bufs stack """
-        # TODO: should I check if self.bufs[bufname] exists and report to log
-        # if it does
-        self.bufs[bufname] = {'modified': False,
-                              'instance': {'id': kwargs['id'],
-                                           'title': kwargs['title'],
-                                           'date': kwargs['date'],
-                                           'recit': kwargs['recit'],
-                                           'tags': kwargs['tags'],
-                                           'drtype': kwargs['drtype']}}
+        tmpfile = tempfile.mkstemp(dir=config.BUF_PATH)[1]
+        with open(tmpfile, "w") as text_file:
+            print(instance['recit'], file=text_file, end='')
+        self.bufs[tmpfile] = {'modified': False,
+                              'instance': instance}
+        return tmpfile
 
-    def modify(self, bufname, **kwargs):
+    def modify(self, bufname, instance):
         """ modify a buffer
         Arguments:
             - bufname (str): name of the buffer
-            - instance (dict): {'id': id,
-                                'title': title,
+            - instance (dict): {'title': title,
                                 'date': date,
                                 'recit': recit,
                                 'tags': tags,
                                 'drtype': drtype}
-                                instance can contains one or all of the above
-                                metionned keys
         """
-        # TODO: should I check if self.bufs[bufname] exists and report to log
-        # if it does not
-        # TODO: Don't set modified to True if field before = field after ?
+        # TODO: Don't set modified to True if field before = field after
         self.bufs[bufname]['modified'] = True
-        for key in kwargs:
-            self.bufs[bufname]['instance'][key] = kwargs[key]
+        for key in instance:
+            self.bufs[bufname]['instance'][key] = instance[key]
 
     def save(self, bufname):
         """ Save a buffer to the database """
@@ -129,9 +119,9 @@ class Buffer():
             idnum.append(self.bufs[elem]['instance']['id'])
         return idnum
 
-    def get_bufname(self, idNum):
-        """ Return buffername which correspond to idNum """
-        dict_tmp = {k: v for k, v in self.bufs.items() if v['instance']['id'] == idNum}
+    def get_bufname(self, idnum):
+        """ Return buffername which correspond to idnum """
+        dict_tmp = {k: v for k, v in self.bufs.items() if v['instance']['id'] == idnum}
         for elem in dict_tmp:
             return elem
 
@@ -149,12 +139,32 @@ class Buffer():
 class Model:
     def __init__(self):
         self.myTree = Observable(DreamDAO.get_tree())
-        self.myBuff = Buffer()
+        self.myCurBuff = Observable()
+        self.myBuffList = Buffer()
 
     def updateTree(self):
         self.myTree.set(DreamDAO.get_tree())
 
-    # TODO: add wrapper functions for myBuff
+    def addDreamBuff(self, instance):
+        return self.myBuffList.add(instance)
+
+    def setDreamMeta(self, bufname, instance):
+        self.myBuffList.modify(bufname, instance)
+
+    def setCurBuff(self, bufname):
+        self.myCurBuff.set(bufname)
+
+    def getCurBuff(self):
+        return self.myCurBuff.get()
+
+    def get_inst_buf(self, bufname):
+        return self.myBuffList.bufs[bufname]['instance']
+
+    def get_ids(self):
+        return self.myBuffList.get_ids()
+
+    def get_buf_by_id(self, idnum):
+        return self.myBuffList.get_bufname(idnum)
 
 
 class DreamDialog(Gtk.Dialog):
@@ -236,6 +246,82 @@ class DreamDialog(Gtk.Dialog):
         self.box.props.spacing = 2
 
         self.show_all()
+
+    def _set_title(self, title):
+        self.title_entry.set_text(title)
+
+    def _set_date(self, year, month, day):
+        self.date_entry.select_month(month, year)
+        self.date_entry.select_day(day)
+
+    def _set_tags(self, tags):
+        """
+        Arguments:
+                - tags list(str)
+        """
+        for tag in tags:
+            self.liststore_tags_entry.append([tag])
+
+    def _set_drtype(self, drtype):
+        """
+        Arguments:
+                - drtype (str)
+        """
+        self.drtype_entry.get_child().set_text(drtype)
+
+    def set_dialog(self, instance):
+        """ Set dialog fields
+        """
+        self._set_title(instance['title'])
+        self._set_date(*list(map(int, instance['date'].strftime("%Y-%m-%d").split('-'))))
+        self._set_tags(instance['tags'])
+        self._set_drtype(instance['drtype'])
+
+    def _get_dialog(self):
+        """ Get dialog fields
+        """
+        instance = {}
+
+        tags = []
+        for row in self.liststore_tags_entry:
+            if row[0] not in tags and row[0].strip():
+                tags.append(row[0])
+        instance['tags'] = tags
+
+        year, month, day = self.date_entry.get_date()
+        instance['date'] = datetime.datetime.strptime(f'{year}{month}{day}', "%Y%m%d").date()
+
+        instance['title'] = self.title_entry.get_text()
+        instance['drtype'] = self.drtype_entry.get_active_text()
+
+        return instance
+
+    def spawn(self):
+        """ spawn dialog
+        """
+        instance = None
+        response = self._run()
+
+        if response == Gtk.ResponseType.OK:
+            logger.info("The OK button was clicked")
+            instance = self._get_dialog()
+        elif response == Gtk.ResponseType.CANCEL:
+            logger.info("The Cancel button was clicked")
+
+        self._destroy()
+
+        return instance
+
+    def _run(self):
+        """ Run self
+        """
+        response = self.run()
+        return response
+
+    def _destroy(self):
+        """ Destroy self
+        """
+        self.destroy()
 
     def on_combo_changed(self, widget, path, text):
         self.liststore_tags_entry[path][0] = text
@@ -320,13 +406,19 @@ class Editor(Gtk.Frame):
     def nvim_notify(self, nvim: object, sub: str, args: object):
         """ neovim rpcnotify events handler """
         if sub == 'DreamGuiEvent' and args[0] == 'Save':
+            logger.info('notify save event')
+            instance = {}
             with open(args[1], 'r') as myfile:
                 data = myfile.read()
-            self.event_callback['Save'](args[1], recit=data)
+            instance['recit'] = data
+            self.event_callback['Save'](args[1], instance)
             logger.info(f'{args[1]} saved !')
         if sub == 'DreamGuiEvent' and args[0] == 'Quit':
-            logger.info('vim quit event')
+            logger.info('notify quit event')
             self.event_callback['Quit']()
+        if sub == 'DreamGuiEvent' and args[0] == 'Current':
+            logger.info('notify current event')
+            self.event_callback['Current'](args[1])
 
     @GObject.Signal(flags=GObject.SignalFlags.RUN_LAST)
     def nvim_request(self, nvim: object, sub: str, args: object):
@@ -359,6 +451,9 @@ class MenuBar(Gtk.HeaderBar):
 
         self.newdream = Gtk.Button(label="New dream")
         box.add(self.newdream)
+
+        self.moddream = Gtk.Button(label="Modify dream")
+        box.add(self.moddream)
 
         self.pack_start(box)
 
@@ -402,6 +497,9 @@ class View(Gtk.Window):
                     for dream in tree[year][month][day]:
                         self.navigationbar.store.append(piter3, dream)
 
+    def SetCurBuffer(self, bufname):
+        self.edit.nvim.command(f'edit {bufname}', async=True)
+
 
 class Controller:
     def __init__(self):
@@ -411,16 +509,20 @@ class Controller:
 
         # Add callback to the model
         self.model.myTree.addCallback(self.TreeChanged)
+        self.model.myCurBuff.addCallback(self.CurBuffChanged)
 
         # Add callback for neovim rpc event
-        self.view.edit.event_callback['Save'] = self.model.myBuff.modify
-        self.view.edit.event_callback['Quit'] = self.model.myBuff.save_all
+        self.view.edit.event_callback['Save'] = self.model.myBuffList.modify
+        self.view.edit.event_callback['Quit'] = self.model.myBuffList.save_all
+        # modify Observable without triggering the Observable callbacks
+        self.view.edit.event_callback['Current'] = (lambda x: setattr(self.model.myCurBuff, 'data', x))
 
         # Configure widgets events
         self.view.connect("delete-event", self.on_close_main)
         self.view.edit.terminal.connect("child-exited", self.on_child_exit)
         self.view.navigationbar.tree.connect("row-activated", self.on_tree_double_click)
         self.view.menubar.newdream.connect("clicked", self.on_newdream_click)
+        self.view.menubar.moddream.connect("clicked", self.on_moddream_click)
 
         # Init the view
         self.TreeChanged(self.model.myTree.get())
@@ -434,38 +536,27 @@ class Controller:
         # destroy event. To stop the propagation the handler must return True
         return True
 
-    def on_newdream_click(self, *args):
+    def on_moddream_click(self, *args):
+        logger.info("modify dream clicked")
         dialog = DreamDialog(self.view)
-        response = dialog.run()
+        bufname = self.model.getCurBuff()
+        dialog.set_dialog(self.model.get_inst_buf(bufname))
 
-        if response == Gtk.ResponseType.OK:
-            logger.info("The OK button of the newdream dialog was clicked")
-            logger.info(f'date: {dialog.date_entry.get_date()}')
-            logger.info(f'title: {dialog.title_entry.get_text()}')
-            logger.info(f'dream type: {dialog.drtype_entry.get_active_text()}')
-            tag_tmp = []
-            for row in dialog.liststore_tags_entry:
-                if row[0] not in tag_tmp:
-                    tag_tmp.append(row[0])
-            logger.info(f'tags: {tag_tmp}')
-            year, month, day = dialog.date_entry.get_date()
-            date = datetime.datetime.strptime(f'{year}{month}{day}', "%Y%m%d")
-            # TODO: check that the combination (date, title) does not already
-            # exists in bufs
-            tmpfile = tempfile.mkstemp(dir=config.BUF_PATH)
-            with open(tmpfile[1], "w") as text_file:
-                print("", file=text_file, end='')
-            self.model.myBuff.add(tmpfile[1], id=None,
-                                  title=dialog.title_entry.get_text(),
-                                  date=date,
-                                  recit="",
-                                  tags=tag_tmp,
-                                  drtype=dialog.drtype_entry.get_active_text())
-            self.view.edit.nvim.command(f'edit {tmpfile[1]}', async=True)
-        elif response == Gtk.ResponseType.CANCEL:
-            logger.info("The Cancel button of the newdream dialog was clicked")
+        instance = dialog.spawn()
 
-        dialog.destroy()
+        if instance is not None:
+            self.DreamMetaChanged(bufname, instance)
+
+    def on_newdream_click(self, *args):
+        logger.info("add dream clicked")
+        dialog = DreamDialog(self.view)
+
+        instance = dialog.spawn()
+
+        if instance is not None:
+            instance['id'] = None
+            instance['recit'] = ''
+            self.AddDream(instance)
 
     def on_child_exit(self, *args):
         logger.info("nvim exited")
@@ -478,32 +569,29 @@ class Controller:
         """
         if path.get_depth() == 4:
             logger.info(f'double click on dream id: {self.view.navigationbar.store[path][1]}')
-            inst = DreamDAO.find_by_id(self.view.navigationbar.store[path][1])
-            if inst['id'] not in self.model.myBuff.get_ids():
-                tmpfile = tempfile.mkstemp(dir=config.BUF_PATH)
-                with open(tmpfile[1], "w") as text_file:
-                    print(inst['recit'], file=text_file, end='')
-                self.model.myBuff.add(tmpfile[1], id=inst['id'],
-                                      title=inst['title'],
-                                      date=inst['date'],
-                                      recit=inst['recit'],
-                                      tags=inst['tags'],
-                                      drtype=inst['drtype'])
-                self.view.edit.nvim.command(f'edit {tmpfile[1]}', async=True)
+            instance = DreamDAO.find_by_id(self.view.navigationbar.store[path][1])
+            if instance['id'] not in self.model.get_ids():
+                self.AddDream(instance)
             else:
-                print(f"instance:{inst.id} already in buff")
-                tmp_val = self.model.myBuff.get_bufname(inst.id)
-                self.view.edit.nvim.command(f'buffer {tmp_val}', async=True)
+                logger.info(f"instance: {instance['id']} already in bufflist")
+                tmp_val = self.model.myBuffList.get_bufname(instance['id'])
+                bufname = self.model.get_buf_by_id(instance['id'])
+                self.model.setCurBuff(bufname)
         else:
             logger.info("double click on date (year, month, or day)")
 
-    def AddDream(self):
-        # TODO: copy code from on_tree_double_click, add callback and custom
-        # signal
-        pass
+    def AddDream(self, instance):
+        bufname = self.model.addDreamBuff(instance)
+        self.model.setCurBuff(bufname)
+
+    def DreamMetaChanged(self, bufname, instance):
+        self.model.setDreamMeta(bufname, instance)
 
     def TreeChanged(self, tree):
         self.view.SetTree(tree)
+
+    def CurBuffChanged(self, bufname):
+        self.view.SetCurBuffer(bufname)
 
     def RunGui(self):
         Gtk.main()
@@ -520,3 +608,4 @@ class Controller:
 # should not be used in newly-written code.  Use vte_terminal_spawn_async()
 # instead. Not sure what my version is, but vte_terminal_spawn_async is not
 # available.
+# TODO: trigger TreeChanged on db modified
