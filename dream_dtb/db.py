@@ -233,7 +233,6 @@ class DreamDAO:
 
     @classmethod
     def update(cls, idnum, instance):
-        # TODO: replace id --> idNum in every file because seems to be a keyword
         # TODO: update and create too much code duplication
         if instance['tags'] is None:
             instance['tags'] = []
@@ -295,7 +294,6 @@ class DreamDAO:
 
         if tags is None:
             tags = []
-        # TODO: remove empty string or space tags from tags list '' ' '
 
         if tags:
             for elem in tags:
@@ -363,5 +361,4 @@ class DreamDAO:
 
 # initialize database
 InitDb(Engine, Base)
-# TODO: Move all DAO classes into its own file ?
 # TODO: Singleton seems useless

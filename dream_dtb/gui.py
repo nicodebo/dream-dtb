@@ -95,12 +95,9 @@ class Buffer():
 
     def save(self, bufname):
         """ Save a buffer to the database """
-        # TODO: make save private --> _save(self, bufname) ?
         # TODO: if buf['instance']['recit'] == '', should I discard writing to
         # database an empty dream ? or maybe remove the dream from the database
         # if it already exists
-        # TODO: put the line into a try catch block to be sure it exists.
-        # Otherwise report to log
         buf = self.bufs[bufname]
         if buf['modified']:
             if buf['instance']['id'] is None:
@@ -207,7 +204,8 @@ class DreamDialog(Gtk.Dialog):
         renderer_combo.set_property("has-entry", True)
         renderer_combo.connect("edited", self.on_combo_changed)
 
-        self.column_combo = Gtk.TreeViewColumn("0 tag(s)", renderer_combo, text=0)
+        self.column_combo = Gtk.TreeViewColumn("", renderer_combo, text=0)
+        self.set_combo_title(0)
         self.tags_entry.append_column(self.column_combo)
 
         # used to prevent a gtk warning bug
@@ -261,6 +259,8 @@ class DreamDialog(Gtk.Dialog):
         """
         for tag in tags:
             self.liststore_tags_entry.append([tag])
+
+        self.set_combo_title(len(tags))
 
     def _set_drtype(self, drtype):
         """
@@ -323,24 +323,27 @@ class DreamDialog(Gtk.Dialog):
         """
         self.destroy()
 
+    def set_combo_title(self, nbentries):
+        """ Set the tag combobox title
+        """
+        self.column_combo.set_title(f'{nbentries} tag(s)')
+
     def on_combo_changed(self, widget, path, text):
         self.liststore_tags_entry[path][0] = text
 
     def on_add_tag_clicked(self, *args):
         self.liststore_tags_entry.append(["new tag"])
-        new_title = self.column_combo.get_title()
-        new_title = new_title.split(sep=' ')
-        new_title = f'{int(new_title[0])+1} {new_title[1]}'
-        self.column_combo.set_title(new_title)
+        title = self.column_combo.get_title()
+        nbentries = int(title.split(sep=' ')[0]) + 1
+        self.set_combo_title(nbentries)
         self.box = self.get_content_area()
 
     def on_rm_tag_clicked(self, *args):
         model, treeiter = self.tags_entry.get_selection().get_selected()
         if treeiter is not None:
-            new_title = self.column_combo.get_title()
-            new_title = new_title.split(sep=' ')
-            new_title = f'{int(new_title[0])-1} {new_title[1]}'
-            self.column_combo.set_title(new_title)
+            title = self.column_combo.get_title()
+            nbentries = int(title.split(sep=' ')[0]) - 1
+            self.set_combo_title(nbentries)
             self.liststore_tags_entry.remove(treeiter)
         else:
             logger.info("no item selected !")
@@ -512,6 +515,7 @@ class Controller:
         self.model.myCurBuff.addCallback(self.CurBuffChanged)
 
         # Add callback for neovim rpc event
+        # TODO: make model wrapper for myBuffList.modify() and myBuffList.save_all
         self.view.edit.event_callback['Save'] = self.model.myBuffList.modify
         self.view.edit.event_callback['Quit'] = self.model.myBuffList.save_all
         # modify Observable without triggering the Observable callbacks
