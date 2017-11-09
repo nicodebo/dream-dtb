@@ -613,3 +613,4 @@ class Controller:
 # instead. Not sure what my version is, but vte_terminal_spawn_async is not
 # available.
 # TODO: trigger TreeChanged on db modified
+# TODO: Fix clicking modify dream when no current buffname.

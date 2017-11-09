@@ -233,39 +233,32 @@ class DreamDAO:
 
     @classmethod
     def update(cls, idnum, instance):
-        # TODO: update and create too much code duplication
+        # TODO: not sure if check necessary
         if instance['tags'] is None:
             instance['tags'] = []
         if instance['drtype'] is None:
             instance['drtype'] = ''
 
-        if instance['tags']:
-            for elem in instance['tags']:
-                TagDAO.create(elem)
-
-        if instance['drtype']:
-            DreamTypeDAO.create(instance['drtype'])
-
         try:
             with session_scope() as session:
                 record = session.query(Dream).filter_by(id=idnum).one()
-                # # TODO: This is wrong, I need to check record.tags against
-                # # instance['tags'] and remove/add the necessary tags.
-                # if tags:
-                #     tags_rec = session.query(Tag).filter(Tag.label.in_(tags))
-                #     for elem in tags_rec:
-                #         record.tags.append(elem)
-                # # TODO: This is wrong, I need to check record.tags against
-                # # instance['drtype'] and remove/add the necessary tags.
-                # if drtype:
-                #     drtype_rec = session.query(DreamType).filter(DreamType.label == drtype).first()
-                #     record.drtype.append(drtype_rec)
+                old_tags = record.get_tags()
+                old_drtype = record.get_drtype()
                 record.date = instance['date']
                 record.title = instance['title']
                 record.recit = instance['recit']
                 session.add(record)
         except IntegrityError:
-            logger.info("error bli")
+            logger.info("error update dream db")
+
+        to_add_tags = list(set(instance['tags']).difference(old_tags))
+        to_rm_tags = list(set(old_tags).difference(instance['tags']))
+        cls._add_tags(idnum, to_add_tags)
+        cls._rm_tags(idnum, to_rm_tags)
+
+        if instance['drtype'] != old_drtype:
+            cls._add_drtype(idnum, instance['drtype'])
+            cls._rm_drtype(idnum, old_drtype)
 
     @classmethod
     def find_by_id(cls, idnum):
@@ -288,6 +281,37 @@ class DreamDAO:
         return record
 
     @classmethod
+    def get_tree(cls):
+
+        tree = OrderedDict()
+
+        with session_scope() as session:
+            instances = session.query(Dream).order_by(Dream.date, Dream.created)
+            nbrows = instances.count()
+            dftree = pd.DataFrame(index = np.arange(0, nbrows), columns=['year', 'month', 'day', 'id', 'title'])
+            for i, inst in enumerate(instances):
+                year = inst.date.strftime('%Y')
+                month = inst.date.strftime('%m')
+                day = inst.date.strftime('%d')
+                dftree.loc[i] = [year, month, day, inst.id, inst.title]
+
+        dftree.apply(cls._poptree, args=(tree,), axis=1)
+
+        return(tree)
+
+    @staticmethod
+    def _poptree(row, tree):
+        """ A helper function to be used with an dataframe.apply function
+        """
+        # TODO: make 'private'
+        if row['year'] not in tree:
+            tree[row['year']] = OrderedDict()
+        if row['month'] not in tree[row['year']]:
+            tree[row['year']][row['month']] = OrderedDict()
+
+        tree[row['year']][row['month']].setdefault(row['day'], []).append([row['title'], row['id']])
+
+    @classmethod
     def _add_tags(cls, idnum, tags=None):
         """ append tags to record whose id = idnum
         """
@@ -304,11 +328,29 @@ class DreamDAO:
                     instance = session.query(Dream).filter(Dream.id==idnum).one()
                     tags_rec = session.query(Tag).filter(Tag.label.in_(tags))
                     for elem in tags_rec:
-                        if tags_rec not in instance.tags:
+                        if elem not in instance.tags:
                             instance.tags.append(elem)
             except:
-                logger.info("append tags error")
-                raise
+                logger.error("append tags error")
+
+    @classmethod
+    def _rm_tags(cls, idnum, tags=None):
+        """ remove tags to record whose id = idnum
+        """
+
+        if tags is None:
+            tags = []
+
+        if tags:
+            try:
+                with session_scope() as session:
+                    instance = session.query(Dream).filter(Dream.id==idnum).one()
+                    tags_rec = session.query(Tag).filter(Tag.label.in_(tags))
+                    for elem in tags_rec:
+                        if elem in instance.tags:
+                            instance.tags.remove(elem)
+            except:
+                logger.error("remove tags error")
 
     @classmethod
     def _add_drtype(cls, idnum, drtype=None):
@@ -318,7 +360,6 @@ class DreamDAO:
         if drtype:
             DreamTypeDAO.create(drtype)
 
-            # TODO: either use .one() or .first() but not both.
             try:
                 with session_scope() as session:
                     instance = session.query(Dream).filter(Dream.id == idnum).one()
@@ -326,39 +367,25 @@ class DreamDAO:
                     if drtype_rec not in instance.drtype:
                         instance.drtype.append(drtype_rec)
             except:
-                logger.info("append drtype error")
+                logger.error("append drtype error")
 
     @classmethod
-    def get_tree(cls):
+    def _rm_drtype(cls, idnum, drtype=None):
+        if drtype is None:
+            drtype = ''
 
-        tree = OrderedDict()
-
-        with session_scope() as session:
-            instances = session.query(Dream).order_by(Dream.date, Dream.created)
-            nbrows = instances.count()
-            dftree = pd.DataFrame(index = np.arange(0, nbrows), columns=['year', 'month', 'day', 'id', 'title'])
-            for i, inst in enumerate(instances):
-                year = inst.date.strftime('%Y')
-                month = inst.date.strftime('%m')
-                day = inst.date.strftime('%d')
-                dftree.loc[i] = [year, month, day, inst.id, inst.title]
-
-        dftree.apply(cls.poptree, args=(tree,), axis=1)
-
-        return(tree)
-
-    @staticmethod
-    def poptree(row, tree):
-        """ A helper function to be used with an dataframe.apply function
-        """
-        if row['year'] not in tree:
-            tree[row['year']] = OrderedDict()
-        if row['month'] not in tree[row['year']]:
-            tree[row['year']][row['month']] = OrderedDict()
-
-        tree[row['year']][row['month']].setdefault(row['day'], []).append([row['title'], row['id']])
+        if drtype:
+            try:
+                with session_scope() as session:
+                    instance = session.query(Dream).filter(Dream.id == idnum).one()
+                    drtype_rec = session.query(DreamType).filter(DreamType.label == drtype).first()
+                    if drtype_rec in instance.drtype:
+                        instance.drtype.remove(drtype_rec)
+            except:
+                logger.error("remove drtype error")
 
 
 # initialize database
 InitDb(Engine, Base)
 # TODO: Singleton seems useless
+# TODO: Remplacer recit par body dans tout les fichiers
