@@ -151,6 +151,16 @@ class Model:
     def setCurBuff(self, bufname):
         self.myCurBuff.set(bufname)
 
+    def setCurBuffSilent(self, bufname):
+        """ Set current buffer without triggering the callback
+        """
+        # if bufname has been created from vim, ignore it.
+        if bufname in self.myBuffList.bufs:
+            x = bufname
+        else:
+            x = None
+        setattr(self.myCurBuff, 'data', x)
+
     def getCurBuff(self):
         return self.myCurBuff.get()
 
@@ -530,7 +540,7 @@ class Controller:
         self.view.edit.event_callback['Save'] = self.model.myBuffList.modify
         self.view.edit.event_callback['Quit'] = self.model.myBuffList.save_all
         # modify Observable without triggering the Observable callbacks
-        self.view.edit.event_callback['Current'] = (lambda x: setattr(self.model.myCurBuff, 'data', x))
+        self.view.edit.event_callback['Current'] = self.model.setCurBuffSilent
 
         # Configure widgets events
         self.view.connect("delete-event", self.on_close_main)
@@ -630,5 +640,4 @@ class Controller:
 # instead. Not sure what my version is, but vte_terminal_spawn_async is not
 # available.
 # TODO: trigger TreeChanged on db modified
-# TODO: don't set curbuffer if it has been created outside of the gui. Meaning
-# :e /path/to/file or set curbuffer to None
+# TODO: Fix clicking modify dream when no current buffname.

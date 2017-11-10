@@ -303,7 +303,6 @@ class DreamDAO:
     def _poptree(row, tree):
         """ A helper function to be used with an dataframe.apply function
         """
-        # TODO: make 'private'
         if row['year'] not in tree:
             tree[row['year']] = OrderedDict()
         if row['month'] not in tree[row['year']]:
