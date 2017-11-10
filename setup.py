@@ -3,7 +3,8 @@ Dream note gui
 """
 from setuptools import find_packages, setup
 
-dependencies = ['click', 'click-default-group', 'neovim', 'SQLAlchemy', 'sqlalchemy-utils', 'pandas']
+dependencies = ['click', 'click-default-group', 'click-datetime',
+                'neovim', 'SQLAlchemy', 'sqlalchemy-utils', 'pandas']
 
 setup(
     name='dream-dtb',

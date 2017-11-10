@@ -1,7 +1,10 @@
 import click
+from datetime import datetime
 from click_default_group import DefaultGroup
+from click_datetime import Datetime
 import logging
 import logging.config
+
 
 from dream_dtb.gui import Controller
 from dream_dtb import config
@@ -10,8 +13,11 @@ logging.config.dictConfig(config.LOGGING)
 logger = logging.getLogger('dream_logger')
 
 
-def launch_gui(date=None, title=None, tags=None, drtype=None):
-    app = Controller()
+def launch_gui(instance=None):
+    """ wrapper to launch the main gtk window
+    if instance is not None, nvim will start with a dream open
+    """
+    app = Controller(instance)
     app.RunGui()
 
 
@@ -19,17 +25,30 @@ def launch_gui(date=None, title=None, tags=None, drtype=None):
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
 
-@click.group(context_settings=CONTEXT_SETTINGS, cls=DefaultGroup, default='add', default_if_no_args=True)
+@click.group(context_settings=CONTEXT_SETTINGS, cls=DefaultGroup, default='launch', default_if_no_args=True)
 def main():
     """Dream note gui """
     pass
 
 
 @click.command(context_settings=CONTEXT_SETTINGS)
+@click.option('--date', type=Datetime(format='%Y-%m-%d'),
+              default=datetime.now(),
+              help='date of dream YYYY-MM-DD, default to today')
+@click.option('--type', type=str, default='normal',
+              help='dream type (normal, lucid, ...) default to normal')
+@click.option('--tags', '-t', type=str, default=None, multiple=True,
+              help='tags of the dream. Can be specified multiple times')
+@click.argument('title')
 def add(**kwargs):
-    """ start writing a dream """
+    """ Add a new dream """
     logger.info('add dream command')
-    launch_gui()
+    instance = {}
+    instance['date'] = kwargs['date'].date()
+    instance['tags'] = list(kwargs['tags'])
+    instance['drtype'] = kwargs['type']
+    instance['title'] = kwargs['title']
+    launch_gui(instance)
 
 
 @click.command(context_settings=CONTEXT_SETTINGS)
@@ -50,6 +69,13 @@ def stat(**kwargs):
     print("output stats")
 
 
+@click.command(context_settings=CONTEXT_SETTINGS)
+def launch(**kwargs):
+    """ Start the gui (same as dreamdtb without any subcommand) """
+    logger.info('launch dream command')
+    launch_gui()
+
+
 @click.command()
 @click.pass_context
 def help(ctx):
@@ -60,6 +86,7 @@ def help(ctx):
 main.add_command(add)
 main.add_command(browse)
 main.add_command(book)
+main.add_command(launch)
 main.add_command(stat)
 main.add_command(help)
 

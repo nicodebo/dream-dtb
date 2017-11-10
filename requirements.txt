@@ -4,11 +4,12 @@
 #
 #    pip-compile --output-file requirements.txt setup.py
 #
+click-datetime==0.2
 click-default-group==1.2
 click==6.7
 greenlet==0.4.12          # via neovim
 msgpack-python==0.4.8     # via neovim
-neovim==0.1.13
+neovim==0.2.0
 numpy==1.13.3             # via pandas
 pandas==0.21.0
 python-dateutil==2.6.1    # via pandas

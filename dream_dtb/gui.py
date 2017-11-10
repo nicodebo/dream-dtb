@@ -71,9 +71,12 @@ class Buffer():
 
     def add(self, instance):
         """ add a buffer to the bufs stack """
+        # TODO: check if the (date, title) does already exists in database +
+        # bufs. If it does open the corresponding dream. otherwise create a new
+        # one.
         tmpfile = tempfile.mkstemp(dir=config.BUF_PATH)[1]
         with open(tmpfile, "w") as text_file:
-            print(instance['recit'], file=text_file, end='')
+            print(instance.get('recit', ''), file=text_file, end='')
         self.bufs[tmpfile] = {'modified': False,
                               'instance': instance}
         return tmpfile
@@ -100,10 +103,11 @@ class Buffer():
         # if it already exists
         buf = self.bufs[bufname]
         if buf['modified']:
-            if buf['instance']['id'] is None:
+            if buf['instance'].get('id', None) is None:
                 logger.info("create record...")
-                DreamDAO.create(buf['instance'])
+                idnum = DreamDAO.create(buf['instance'])
                 logger.info("done creating record")
+                self.bufs[bufname]['id'] = idnum
             else:
                 logger.info("modify record...")
                 DreamDAO.update(buf['instance']['id'], buf['instance'])
@@ -425,6 +429,7 @@ class Editor(Gtk.Frame):
                                          partial(self.emit, 'nvim-request', nvim),
                                          partial(self.emit, 'nvim-notify', nvim))
         self.nvim_loop.start()
+        # self.event_callback['startup'](self.event_callback['startup']['data'])
 
     @GObject.Signal(flags=GObject.SignalFlags.RUN_LAST)
     def nvim_notify(self, nvim: object, sub: str, args: object):
@@ -526,7 +531,7 @@ class View(Gtk.Window):
 
 
 class Controller:
-    def __init__(self):
+    def __init__(self, instance):
         # Create view and model
         self.model = Model()
         self.view = View()
@@ -551,8 +556,32 @@ class Controller:
 
         # Init the view
         self.TreeChanged(self.model.myTree.get())
+        # Allow to run self.on_startup periodically. We are waiting for nvim to
+        # be initialized. self.on_startup must return False for stopping the
+        # GLib to stop.
+        GLib.timeout_add(100, self.on_startup, instance)
 
         self.view.show_all()
+
+    def on_startup(self, instance):
+        """ Open an initial dream specified on the command line
+        """
+        if instance is not None:
+            logger.info("try opening initial instance")
+            try:
+                self.view.edit.nvim
+            except AttributeError:
+                logger.warning("nvim does not exists")
+                var_exists = False
+            else:
+                logger.warning("nvim does exists")
+                var_exists = True
+            if var_exists:
+                self.AddDream(instance)
+            return not var_exists
+        else:
+            logger.info("initial instance empty")
+            return False
 
     def on_close_main(self, *args):
         logger.info("close event")
@@ -584,8 +613,6 @@ class Controller:
         instance = dialog.spawn()
 
         if instance is not None:
-            instance['id'] = None
-            instance['recit'] = ''
             self.AddDream(instance)
 
     def on_child_exit(self, *args):

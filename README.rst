@@ -24,8 +24,6 @@ TODO
 -  upload on pypi for easier installation
 -  generate a pdf from the database
 -  browse dream database on a web browser like a blog
--  add a dream from the command line
--  allow to modify tags, dreamtype, title, date of a dream
 -  allow to remove a dream from the database
 -  zsh completion script
 
