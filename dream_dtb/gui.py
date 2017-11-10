@@ -270,7 +270,7 @@ class DreamDialog(Gtk.Dialog):
         self.title_entry.set_text(title)
 
     def _set_date(self, year, month, day):
-        self.date_entry.select_month(month, year)
+        self.date_entry.select_month(month - 1, year)
         self.date_entry.select_day(day)
 
     def _set_tags(self, tags):
@@ -310,7 +310,7 @@ class DreamDialog(Gtk.Dialog):
         instance['tags'] = tags
 
         year, month, day = self.date_entry.get_date()
-        instance['date'] = datetime.datetime.strptime(f'{year}{month}{day}', "%Y%m%d").date()
+        instance['date'] = datetime.datetime.strptime(f'{year}{month+1}{day}', "%Y%m%d").date()
 
         instance['title'] = self.title_entry.get_text()
         instance['drtype'] = self.drtype_entry.get_active_text()
@@ -576,7 +576,6 @@ class Controller:
             main = "no dream selected"
             second = "you must open a dream from the navigation tree or by creating a new dream"
             info = InfoDialog(self.view, main, second)
-            # TODO: here fix dialog
 
     def on_newdream_click(self, *args):
         logger.info("add dream clicked")
@@ -640,4 +639,3 @@ class Controller:
 # instead. Not sure what my version is, but vte_terminal_spawn_async is not
 # available.
 # TODO: trigger TreeChanged on db modified
-# TODO: Fix clicking modify dream when no current buffname.
