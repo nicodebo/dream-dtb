@@ -164,6 +164,17 @@ class Model:
         return self.myBuffList.get_bufname(idnum)
 
 
+class InfoDialog(Gtk.MessageDialog):
+    def __init__(self, parent, main, second):
+        super().__init__(parent, 0, Gtk.MessageType.INFO,
+                         Gtk.ButtonsType.OK, f'INFO: {main}')
+        self.format_secondary_text(f'{second}')
+        logger.info("INFO dialog open")
+        self.run()
+        logger.info("INFO dialog closed")
+        self.destroy()
+
+
 class DreamDialog(Gtk.Dialog):
     def __init__(self, parent):
         Gtk.Dialog.__init__(self, "New dream dialog", parent, 0,
@@ -542,14 +553,20 @@ class Controller:
 
     def on_moddream_click(self, *args):
         logger.info("modify dream clicked")
-        dialog = DreamDialog(self.view)
-        bufname = self.model.getCurBuff()
-        dialog.set_dialog(self.model.get_inst_buf(bufname))
+        if self.model.getCurBuff() is not None:
+            dialog = DreamDialog(self.view)
+            bufname = self.model.getCurBuff()
+            dialog.set_dialog(self.model.get_inst_buf(bufname))
 
-        instance = dialog.spawn()
+            instance = dialog.spawn()
 
-        if instance is not None:
-            self.DreamMetaChanged(bufname, instance)
+            if instance is not None:
+                self.DreamMetaChanged(bufname, instance)
+        else:
+            main = "no dream selected"
+            second = "you must open a dream from the navigation tree or by creating a new dream"
+            info = InfoDialog(self.view, main, second)
+            # TODO: here fix dialog
 
     def on_newdream_click(self, *args):
         logger.info("add dream clicked")
@@ -613,4 +630,5 @@ class Controller:
 # instead. Not sure what my version is, but vte_terminal_spawn_async is not
 # available.
 # TODO: trigger TreeChanged on db modified
-# TODO: Fix clicking modify dream when no current buffname.
+# TODO: don't set curbuffer if it has been created outside of the gui. Meaning
+# :e /path/to/file or set curbuffer to None
